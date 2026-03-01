@@ -1,0 +1,62 @@
+# ============================================================
+# CCDS — Python ML Research Project .gitignore
+# ============================================================
+
+# ── Virtual Environments ─────────────────────────────────────
+.venv/
+venv/
+env/
+ccds_env/
+ENV/
+.env/
+
+# ── Generated Outputs (re-created by running ccds_framework.py)
+outputs_v*/
+ccds_outputs/
+*.png
+*.tiff
+*.pdf
+
+# ── Python Cache & Bytecode ──────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# ── Jupyter Notebooks (checkpoints) ──────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Distribution / Packaging ─────────────────────────────────
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+
+# ── Testing & Coverage ───────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.tox/
+
+# ── IDEs & Editors ───────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Logs & Temp ──────────────────────────────────────────────
+*.log
+*.tmp
+*.bak
+
+# ── Data files (if any raw/sensitive datasets) ───────────────
+# *.csv
+# *.json
+# data/

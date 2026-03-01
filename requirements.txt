@@ -1,0 +1,4 @@
+# CCDS requirements — work in progress
+numpy
+pandas
+scikit-learn
