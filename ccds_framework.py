@@ -128,3 +128,58 @@ class UCIGermanCreditMirror:
         print(f"  [{self.name}] N={n} | Bad credit rate: {credit_risk.mean():.2%}")
         return df
 
+
+class PimaDiabetesMirror:
+    """Mirrors Pima Indians Diabetes (Smith et al. 1988)."""
+    name = "Pima Diabetes (UCI Mirror)"
+    outcome = "diabetes"
+    feature_cols = ['age', 'bmi', 'glucose', 'blood_pressure',
+                    'insulin', 'skin_thickness', 'pregnancies', 'dpf']
+    immutable = ['age', 'pregnancies']
+    actionability = {
+        'age': 0.0, 'bmi': 0.85, 'glucose': 0.80,
+        'blood_pressure': 0.75, 'insulin': 0.70,
+        'skin_thickness': 0.40, 'pregnancies': 0.0, 'dpf': 0.20,
+    }
+    ground_truth_dag = {
+        'age': [], 'pregnancies': ['age'],
+        'bmi': ['age', 'pregnancies'], 'blood_pressure': ['age', 'bmi'],
+        'insulin': ['bmi', 'age'], 'glucose': ['bmi', 'insulin'],
+        'skin_thickness': ['bmi'], 'dpf': ['age'],
+        'diabetes': ['glucose', 'bmi', 'age', 'dpf', 'insulin'],
+    }
+    domain_edges = [
+        ('age', 'pregnancies'), ('age', 'bmi'), ('pregnancies', 'bmi'),
+        ('bmi', 'blood_pressure'), ('age', 'blood_pressure'),
+        ('bmi', 'insulin'), ('age', 'insulin'),
+        ('insulin', 'glucose'), ('bmi', 'glucose'),
+        ('bmi', 'skin_thickness'), ('age', 'dpf'),
+    ]
+
+    def generate(self, n=768, seed=99):
+        np.random.seed(seed)
+        age          = np.clip(np.random.gamma(3.5, 9, n), 21, 81).round(0)
+        pregnancies  = np.clip(np.random.poisson(0.15*(age-20), n), 0, 17).astype(int)
+        bmi          = np.clip(26 + 0.08*pregnancies + 0.05*(age-30) +
+                               np.random.normal(0,6,n), 15, 67).round(1)
+        blood_pressure = np.clip(50 + 0.3*bmi + 0.2*(age-30) +
+                                  np.random.normal(0,12,n), 24, 122).round(0)
+        insulin      = np.clip(50 + 4*bmi + np.random.exponential(80,n), 14, 846).round(0)
+        glucose      = np.clip(80 + 0.05*insulin + 0.3*bmi +
+                               np.random.normal(0,25,n), 44, 199).round(0)
+        skin_thickness = np.clip(8 + 0.5*bmi + np.random.normal(0,8,n), 7, 99).round(0)
+        dpf          = np.clip(0.1 + 0.005*(age-21) + np.random.exponential(0.3,n),
+                               0.08, 2.42).round(3)
+        log_odds = (-8.5 + 0.035*glucose + 0.08*bmi + 0.015*age +
+                    1.2*dpf - 0.002*insulin + 0.1*pregnancies +
+                    np.random.normal(0, 0.3, n))
+        prob    = 1/(1+np.exp(-log_odds))
+        diabetes = (np.random.uniform(0,1,n) < prob).astype(int)
+        df = pd.DataFrame({
+            'age': age, 'bmi': bmi, 'glucose': glucose,
+            'blood_pressure': blood_pressure, 'insulin': insulin,
+            'skin_thickness': skin_thickness, 'pregnancies': pregnancies,
+            'dpf': dpf, 'diabetes': diabetes,
+        })
+        print(f"  [{self.name}] N={n} | Diabetes rate: {diabetes.mean():.2%}")
+        return df
