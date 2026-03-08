@@ -183,3 +183,77 @@ class PimaDiabetesMirror:
         })
         print(f"  [{self.name}] N={n} | Diabetes rate: {diabetes.mean():.2%}")
         return df
+# [G1] NEW: Adult Income dataset mirror
+class AdultIncomeMirror:
+    """
+    Mirrors UCI Adult Income (Dua & Graff 2019, ID=2).
+    Predict whether income >50K. AUC typical: 0.88-0.92.
+    Provides a 3rd domain with high actionability for CFE.
+    """
+    name = "Adult Income (UCI Mirror)"
+    outcome = "income_high"
+    feature_cols = ['age', 'education_years', 'hours_per_week',
+                    'capital_gain_scaled', 'occupation_level',
+                    'work_experience', 'marital_status_enc', 'native_country_enc']
+    immutable = ['age', 'native_country_enc']
+    actionability = {
+        'age': 0.0, 'education_years': 0.90, 'hours_per_week': 0.80,
+        'capital_gain_scaled': 0.65, 'occupation_level': 0.70,
+        'work_experience': 0.50, 'marital_status_enc': 0.30, 'native_country_enc': 0.0,
+    }
+    ground_truth_dag = {
+        'age': [],
+        'native_country_enc': [],
+        'education_years': ['age'],
+        'work_experience': ['age', 'education_years'],
+        'occupation_level': ['education_years', 'work_experience'],
+        'hours_per_week': ['occupation_level', 'age'],
+        'marital_status_enc': ['age'],
+        'capital_gain_scaled': ['occupation_level', 'hours_per_week'],
+        'income_high': ['education_years', 'occupation_level',
+                        'hours_per_week', 'capital_gain_scaled', 'work_experience'],
+    }
+    domain_edges = [
+        ('age', 'education_years'), ('age', 'work_experience'),
+        ('education_years', 'work_experience'), ('education_years', 'occupation_level'),
+        ('work_experience', 'occupation_level'), ('occupation_level', 'hours_per_week'),
+        ('age', 'hours_per_week'), ('age', 'marital_status_enc'),
+        ('occupation_level', 'capital_gain_scaled'), ('hours_per_week', 'capital_gain_scaled'),
+    ]
+
+    def generate(self, n=1200, seed=77):
+        np.random.seed(seed)
+        age                = np.clip(np.random.gamma(4, 9, n), 18, 90).round(0)
+        native_country_enc = np.random.choice([0,1], n, p=[0.10, 0.90])
+        education_years    = np.clip(8 + 0.06*(age-18) + np.random.normal(0, 2.5, n),
+                                     5, 16).round(0).astype(int)
+        work_experience    = np.clip((age - education_years - 6) + np.random.normal(0, 3, n),
+                                     0, 55).round(0)
+        occupation_level   = np.clip(1 + 0.3*education_years - 0.005*age +
+                                     0.05*work_experience + np.random.normal(0, 0.8, n),
+                                     1, 6).round(0).astype(int)
+        hours_per_week     = np.clip(30 + 2*occupation_level + 0.05*age +
+                                     np.random.normal(0, 8, n), 10, 80).round(0)
+        marital_status_enc = np.random.choice([0,1,2], n, p=[0.45, 0.35, 0.20])
+        capital_gain_scaled = np.clip(0.02*occupation_level*hours_per_week +
+                                      np.random.exponential(0.5, n), 0, 10).round(2)
+        log_odds = (-7.0
+                    + 0.25*education_years
+                    + 0.4*occupation_level
+                    + 0.04*hours_per_week
+                    + 0.3*capital_gain_scaled
+                    + 0.05*work_experience
+                    - 0.01*age
+                    + 0.2*(marital_status_enc==1).astype(float)
+                    + np.random.normal(0, 0.4, n))
+        prob       = 1/(1+np.exp(-log_odds))
+        income_high = (np.random.uniform(0,1,n) < prob).astype(int)
+        df = pd.DataFrame({
+            'age': age, 'education_years': education_years,
+            'hours_per_week': hours_per_week, 'capital_gain_scaled': capital_gain_scaled,
+            'occupation_level': occupation_level, 'work_experience': work_experience,
+            'marital_status_enc': marital_status_enc, 'native_country_enc': native_country_enc,
+            'income_high': income_high,
+        })
+        print(f"  [{self.name}] N={n} | High-income rate: {income_high.mean():.2%}")
+        return df
