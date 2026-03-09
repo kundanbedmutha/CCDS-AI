@@ -257,3 +257,34 @@ class AdultIncomeMirror:
         })
         print(f"  [{self.name}] N={n} | High-income rate: {income_high.mean():.2%}")
         return df
+# ══════════════════════════════════════════════════════════════
+# SMOTE
+# ══════════════════════════════════════════════════════════════
+class SMOTEOversampler:
+    def __init__(self, k=7, ratio=0.70, seed=42):
+        self.k=k; self.ratio=ratio; self.seed=seed
+
+    def fit_resample(self, X, y):
+        np.random.seed(self.seed)
+        classes, counts = np.unique(y, return_counts=True)
+        maj = classes[np.argmax(counts)]; mn = classes[np.argmin(counts)]
+        n_maj=counts.max(); n_min=counts.min()
+        n_gen = max(0, int(n_maj*self.ratio) - n_min)
+        Xmin = X[y==mn]; Xmaj = X[y==maj]
+        synthetic=[]
+        for _ in range(n_gen):
+            i = np.random.randint(0,len(Xmin))
+            s = Xmin[i]
+            d = np.linalg.norm(Xmin-s,axis=1); d[i]=np.inf
+            nb = Xmin[np.argsort(d)[:self.k]]
+            nb_pick = nb[np.random.randint(len(nb))]
+            synthetic.append(s + np.random.uniform(0,1)*(nb_pick-s))
+        if synthetic:
+            Xs = np.vstack(synthetic)
+            ys = np.full(len(Xs), mn)
+            Xr = np.vstack([Xmaj,Xmin,Xs])
+            yr = np.concatenate([np.full(len(Xmaj),maj),np.full(len(Xmin),mn),ys])
+        else:
+            Xr,yr = X,y
+        p = np.random.permutation(len(Xr))
+        return Xr[p], yr[p]
