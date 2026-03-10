@@ -288,3 +288,48 @@ class SMOTEOversampler:
             Xr,yr = X,y
         p = np.random.permutation(len(Xr))
         return Xr[p], yr[p]
+# ══════════════════════════════════════════════════════════════
+# RISK PREDICTOR
+# ══════════════════════════════════════════════════════════════
+class RiskPredictor:
+    def __init__(self, use_smote=True):
+        self.use_smote=use_smote
+        self.model = GradientBoostingClassifier(
+            n_estimators=500, max_depth=4, learning_rate=0.03,
+            subsample=0.8, min_samples_leaf=8,
+            max_features='sqrt', random_state=42,
+            validation_fraction=0.1, n_iter_no_change=30, tol=1e-4)
+        self.scaler = RobustScaler()
+        self.feature_names = None
+        self.smote = SMOTEOversampler(k=7, ratio=0.70, seed=42)
+        self.cv_scores = None
+
+    def fit(self, X, y, verbose=True):
+        self.feature_names = list(X.columns)
+        Xs = self.scaler.fit_transform(X)
+        if self.use_smote:
+            Xs, ya = self.smote.fit_resample(Xs, y.values)
+        else:
+            ya = y.values
+        cnt = np.bincount(ya.astype(int))
+        w = np.where(ya==1, cnt[0]/max(cnt[1],1), 1.0)
+        self.model.fit(Xs, ya, sample_weight=w)
+        if verbose:
+            print(f"    Trained on {len(ya)} samples | {int(ya.sum())} positives (after SMOTE)")
+        return self
+
+    def predict_proba(self, X):
+        return self.model.predict_proba(self.scaler.transform(X[self.feature_names]))[:,1]
+
+    def predict(self, X):
+        return (self.predict_proba(X)>=0.5).astype(int)
+
+    def cross_validate(self, X, y, cv=5):
+        skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=42)
+        scores=[]
+        for tr,val in skf.split(X,y):
+            p = RiskPredictor(use_smote=self.use_smote)
+            p.fit(X.iloc[tr], y.iloc[tr], verbose=False)
+            scores.append(roc_auc_score(y.iloc[val], p.predict_proba(X.iloc[val])))
+        self.cv_scores = np.array(scores)
+        return self.cv_scores
