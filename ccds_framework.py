@@ -333,3 +333,36 @@ class RiskPredictor:
             scores.append(roc_auc_score(y.iloc[val], p.predict_proba(X.iloc[val])))
         self.cv_scores = np.array(scores)
         return self.cv_scores
+# [G3] Multi-model ensemble for robustness evaluation
+class ModelEnsemble:
+    """3-model ensemble for recourse robustness (model multiplicity gap fix)."""
+    def __init__(self):
+        self.models = []
+        self.scaler = RobustScaler()
+        self.feature_names = None
+
+    def fit(self, X, y):
+        self.feature_names = list(X.columns)
+        Xs = self.scaler.fit_transform(X)
+        m1 = GradientBoostingClassifier(n_estimators=200, max_depth=3,
+                                         learning_rate=0.05, random_state=42)
+        m2 = RandomForestClassifier(n_estimators=200, max_depth=5,
+                                     random_state=42, class_weight='balanced')
+        m3 = LogisticRegression(C=1.0, random_state=42,
+                                 class_weight='balanced', max_iter=500)
+        for m in [m1, m2, m3]:
+            m.fit(Xs, y.values)
+            self.models.append(m)
+        return self
+
+    def recourse_robustness(self, cf_dict, desired_class=0):
+        """Check if counterfactual achieves desired class across all 3 models."""
+        fcols = self.feature_names
+        X_cf = pd.DataFrame([{f: cf_dict.get(f, 0) for f in fcols}])
+        Xs = self.scaler.transform(X_cf)
+        results = []
+        for m in self.models:
+            prob = m.predict_proba(Xs)[0][1]
+            pred = int(prob >= 0.5)
+            results.append(pred == desired_class)
+        return sum(results) / len(results)  # fraction of models that agree
