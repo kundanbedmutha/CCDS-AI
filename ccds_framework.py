@@ -366,3 +366,53 @@ class ModelEnsemble:
             pred = int(prob >= 0.5)
             results.append(pred == desired_class)
         return sum(results) / len(results)  # fraction of models that agree
+# ══════════════════════════════════════════════════════════════
+# CAUSAL DISCOVERY
+# ══════════════════════════════════════════════════════════════
+class CausalDiscovery:
+    def __init__(self, alpha=0.05):
+        self.alpha=alpha; self.dag=None; self.feature_names=None
+
+    def _pcorr(self, X, i, j, conds):
+        if not conds:
+            r,p = stats.pearsonr(X[:,i],X[:,j]); return r,p
+        Z = np.hstack([np.ones((len(X),1)), X[:,conds]])
+        try:
+            ri=np.linalg.lstsq(Z,X[:,i],rcond=None)[0]
+            rj=np.linalg.lstsq(Z,X[:,j],rcond=None)[0]
+            r,p=stats.pearsonr(X[:,i]-Z@ri, X[:,j]-Z@rj)
+        except:
+            r,p=0.0,1.0
+        return r,p
+
+    def fit(self, df, domain_edges=None):
+        self.feature_names=list(df.columns)
+        n=len(self.feature_names)
+        fi={f:i for i,f in enumerate(self.feature_names)}
+        X=(df.values.astype(float)); X=(X-X.mean(0))/(X.std(0)+1e-8)
+        G=nx.Graph(); G.add_nodes_from(self.feature_names)
+        for i,j in itertools.combinations(range(n),2):
+            G.add_edge(self.feature_names[i],self.feature_names[j])
+        for depth in range(2):
+            rem=[]
+            for u,v in list(G.edges()):
+                i,j=fi[u],fi[v]
+                nb=[fi[x] for x in G.neighbors(u) if x!=v]
+                for cs in itertools.combinations(nb,depth):
+                    _,p=self._pcorr(X,i,j,list(cs))
+                    if p>self.alpha: rem.append((u,v)); break
+            for u,v in rem:
+                if G.has_edge(u,v): G.remove_edge(u,v)
+        dag=nx.DiGraph(); dag.add_nodes_from(self.feature_names)
+        known=set()
+        if domain_edges:
+            for p,c in domain_edges:
+                if G.has_edge(p,c):
+                    dag.add_edge(p,c); known.add((p,c)); known.add((c,p))
+        for u,v in G.edges():
+            if (u,v) in known or (v,u) in known: continue
+            dag.add_edge(u,v) if X[:,fi[u]].var()>=X[:,fi[v]].var() else dag.add_edge(v,u)
+        while True:
+            try: cy=nx.find_cycle(dag); dag.remove_edge(cy[0][0],cy[0][1])
+            except nx.NetworkXNoCycle: break
+        self.dag=dag; return dag
