@@ -416,3 +416,32 @@ class CausalDiscovery:
             try: cy=nx.find_cycle(dag); dag.remove_edge(cy[0][0],cy[0][1])
             except nx.NetworkXNoCycle: break
         self.dag=dag; return dag
+# ══════════════════════════════════════════════════════════════
+# CAUSAL SHAP
+# ══════════════════════════════════════════════════════════════
+class CausalSHAP:
+    def __init__(self, predictor, dag):
+        self.predictor=predictor; self.dag=dag
+        self.shap_values={}; self.causal_shap_values={}
+
+    def compute(self, X, y, n_repeats=12):
+        Xs=self.predictor.scaler.transform(X[self.predictor.feature_names])
+        res=permutation_importance(self.predictor.model,
+                                   pd.DataFrame(Xs,columns=self.predictor.feature_names).values,
+                                   y.values, n_repeats=n_repeats, random_state=42,
+                                   scoring='roc_auc')
+        std_imp=dict(zip(self.predictor.feature_names,res.importances_mean))
+        causal_imp=std_imp.copy()
+        for feat in self.predictor.feature_names:
+            if feat not in self.dag: continue
+            anc=nx.ancestors(self.dag,feat) if feat in self.dag else set()
+            anc_imp=sum(std_imp.get(a,0) for a in anc if a in self.predictor.feature_names)
+            if anc_imp>std_imp.get(feat,0)*1.5: causal_imp[feat]*=0.35
+        ts=sum(abs(v) for v in std_imp.values()) or 1
+        tc=sum(abs(v) for v in causal_imp.values()) or 1
+        self.shap_values={k:v/ts for k,v in std_imp.items()}
+        self.causal_shap_values={k:v/tc for k,v in causal_imp.items()}
+        return pd.DataFrame({'Feature':list(std_imp.keys()),
+            'Standard_Importance':[self.shap_values[f] for f in std_imp],
+            'Causal_Importance':[self.causal_shap_values[f] for f in std_imp],
+        }).sort_values('Causal_Importance',ascending=False).reset_index(drop=True)
