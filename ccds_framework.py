@@ -445,3 +445,55 @@ class CausalSHAP:
             'Standard_Importance':[self.shap_values[f] for f in std_imp],
             'Causal_Importance':[self.causal_shap_values[f] for f in std_imp],
         }).sort_values('Causal_Importance',ascending=False).reset_index(drop=True)
+# ══════════════════════════════════════════════════════════════
+# CFE GENERATORS
+# ══════════════════════════════════════════════════════════════
+class CausalCFEGenerator:
+    def __init__(self, predictor, dag, X_train, feature_ranges):
+        self.predictor=predictor; self.dag=dag; self.feature_ranges=feature_ranges
+        self.causal_mechanisms={}; self._learn(X_train)
+
+    def _learn(self, X_train):
+        for node in self.dag.nodes():
+            pars=list(self.dag.predecessors(node))
+            if pars and node in X_train.columns:
+                Xa=np.hstack([np.ones((len(X_train),1)), X_train[pars].values])
+                c=np.linalg.lstsq(Xa, X_train[node].values, rcond=None)[0]
+                self.causal_mechanisms[node]={'parents':pars,'coef':c}
+
+    def _propagate(self, instance, feat, val):
+        cf=instance.copy(); cf[feat]=val
+        for node in nx.topological_sort(self.dag):
+            if node==feat or node not in self.causal_mechanisms: continue
+            m=self.causal_mechanisms[node]
+            pv=np.array([cf.get(p,instance.get(p,0)) for p in m['parents']])
+            pred=m['coef'][0]+m['coef'][1:]@pv
+            r=self.feature_ranges.get(node,(0,1))
+            cf[node]=float(np.clip(pred,r[0],r[1]))
+        return cf
+
+    def generate(self, instance, n_cfe=3, immutable=None, desired_class=0):
+        if immutable is None: immutable=[]
+        fcols=self.predictor.feature_names
+        mutable=[f for f in fcols if f not in immutable]
+        cfes=[]
+        for feat in mutable:
+            r=self.feature_ranges.get(feat,(0,1))
+            for val in np.linspace(r[0],r[1],25):
+                if abs(val-instance.get(feat,0))<1e-3: continue
+                cf=self._propagate(instance,feat,val)
+                cf_df=pd.DataFrame([{f:cf.get(f,instance.get(f,0)) for f in fcols}])
+                prob=self.predictor.predict_proba(cf_df)[0]
+                if int(prob>=0.5)==desired_class:
+                    cf['_prob']=round(float(prob),4); cf['_changed_feature']=feat
+                    cfes.append(cf)
+                if len(cfes)>=n_cfe*20: break
+        selected,seen=[],set()
+        for cf in sorted(cfes,key=lambda x:abs(x.get('_prob',0.5)-0.5)):
+            f=cf.get('_changed_feature','')
+            if f not in seen: selected.append(cf); seen.add(f)
+            if len(selected)>=n_cfe: break
+        for cf in cfes:
+            if len(selected)>=n_cfe: break
+            if cf not in selected: selected.append(cf)
+        return selected[:n_cfe]
