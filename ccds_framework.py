@@ -497,3 +497,29 @@ class CausalCFEGenerator:
             if len(selected)>=n_cfe: break
             if cf not in selected: selected.append(cf)
         return selected[:n_cfe]
+class NaiveCFEGenerator:
+    def __init__(self, predictor, feature_ranges):
+        self.predictor=predictor; self.feature_ranges=feature_ranges
+
+    def generate(self, instance, n_cfe=3, immutable=None, desired_class=0):
+        if immutable is None: immutable=[]
+        fcols=self.predictor.feature_names
+        mutable=[f for f in fcols if f not in immutable]
+        cfes=[]
+        for feat in mutable:
+            r=self.feature_ranges.get(feat,(0,1))
+            for val in np.linspace(r[0],r[1],25):
+                if abs(val-instance.get(feat,0))<1e-3: continue
+                cf=instance.copy(); cf[feat]=val
+                cf_df=pd.DataFrame([{f:cf.get(f,instance.get(f,0)) for f in fcols}])
+                prob=self.predictor.predict_proba(cf_df)[0]
+                if int(prob>=0.5)==desired_class:
+                    cf['_prob']=round(float(prob),4); cf['_changed_feature']=feat
+                    cfes.append(cf)
+                if len(cfes)>=n_cfe*20: break
+        selected,seen=[],set()
+        for cf in sorted(cfes,key=lambda x:abs(x.get('_prob',0.5)-0.5)):
+            f=cf.get('_changed_feature','')
+            if f not in seen: selected.append(cf); seen.add(f)
+            if len(selected)>=n_cfe: break
+        return selected[:n_cfe]
