@@ -523,3 +523,24 @@ class NaiveCFEGenerator:
             if f not in seen: selected.append(cf); seen.add(f)
             if len(selected)>=n_cfe: break
         return selected[:n_cfe]
+class RandomCFEGenerator:
+    def __init__(self, predictor, feature_ranges, seed=0):
+        self.predictor=predictor; self.feature_ranges=feature_ranges; self.seed=seed
+
+    def generate(self, instance, n_cfe=3, immutable=None, desired_class=0):
+        np.random.seed(self.seed)
+        if immutable is None: immutable=[]
+        fcols=self.predictor.feature_names
+        mutable=[f for f in fcols if f not in immutable]
+        cfes=[]; attempts=0
+        while len(cfes)<n_cfe and attempts<8000:
+            attempts+=1; cf=instance.copy()
+            feat=np.random.choice(mutable)
+            r=self.feature_ranges.get(feat,(0,1))
+            cf[feat]=np.random.uniform(r[0],r[1])
+            cf_df=pd.DataFrame([{f:cf.get(f,instance.get(f,0)) for f in fcols}])
+            prob=self.predictor.predict_proba(cf_df)[0]
+            if int(prob>=0.5)==desired_class:
+                cf['_prob']=round(float(prob),4); cf['_changed_feature']=feat
+                cfes.append(cf)
+        return cfes[:n_cfe]
