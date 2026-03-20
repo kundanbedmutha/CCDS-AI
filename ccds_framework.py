@@ -544,3 +544,44 @@ class RandomCFEGenerator:
                 cf['_prob']=round(float(prob),4); cf['_changed_feature']=feat
                 cfes.append(cf)
         return cfes[:n_cfe]
+# [G2] CARLA-style: manifold-aware CFE using training data proximity
+class CARLAStyleGenerator:
+    """
+    Simplified CARLA-style generator: searches for valid CFEs from training
+    data neighbors (manifold-aware), then applies minimal perturbation.
+    Addresses the off-manifold gap from proposal Section 2.1.
+    """
+    def __init__(self, predictor, feature_ranges, X_train):
+        self.predictor=predictor
+        self.feature_ranges=feature_ranges
+        self.X_train=X_train.copy()
+        self.scaler=StandardScaler()
+        self.X_train_scaled=self.scaler.fit_transform(X_train)
+
+    def generate(self, instance, n_cfe=3, immutable=None, desired_class=0):
+        if immutable is None: immutable=[]
+        fcols=self.predictor.feature_names
+        inst_arr=np.array([instance.get(f,0) for f in fcols])
+        inst_scaled=self.scaler.transform(inst_arr.reshape(1,-1))[0]
+        dists=np.linalg.norm(self.X_train_scaled - inst_scaled, axis=1)
+        neighbor_idx=np.argsort(dists)
+        cfes=[]
+        for idx in neighbor_idx[:300]:
+            if len(cfes)>=n_cfe: break
+            row=self.X_train.iloc[idx]
+            cf=instance.copy()
+            for f in fcols:
+                if f not in immutable:
+                    # Move toward neighbor
+                    cf[f] = 0.7*row[f] + 0.3*instance.get(f, row[f])
+            cf_df=pd.DataFrame([{f:cf.get(f,instance.get(f,0)) for f in fcols}])
+            prob=self.predictor.predict_proba(cf_df)[0]
+            if int(prob>=0.5)==desired_class:
+                # pick primary changed feature
+                diffs={f:abs(cf.get(f,0)-instance.get(f,0)) for f in fcols
+                       if f not in immutable}
+                pf=max(diffs,key=diffs.get) if diffs else fcols[0]
+                cf['_prob']=round(float(prob),4)
+                cf['_changed_feature']=pf
+                cfes.append(cf)
+        return cfes[:n_cfe]
