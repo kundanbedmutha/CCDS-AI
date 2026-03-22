@@ -585,3 +585,42 @@ class CARLAStyleGenerator:
                 cf['_changed_feature']=pf
                 cfes.append(cf)
         return cfes[:n_cfe]
+# ══════════════════════════════════════════════════════════════
+# IPE (Intervention Prioritization Engine)
+# ══════════════════════════════════════════════════════════════
+class InterventionPrioritizationEngine:
+    def __init__(self, weights=None, actionability_scores=None):
+        self.weights=weights or {'actionability':0.30,'proximity':0.25,'causal_effect':0.30,'robustness':0.15}
+        self.actionability_scores=actionability_scores or {}
+
+    def _proximity(self, instance, cf, feature_ranges):
+        dists=[abs(cf.get(f,instance.get(f,0))-instance.get(f,0))/
+               max(feature_ranges.get(f,(0,1))[1]-feature_ranges.get(f,(0,1))[0],1)
+               for f in instance if not str(f).startswith('_')]
+        return 1-min(np.mean(dists)*3,1.0) if dists else 0
+
+    def _robustness(self, cf, predictor, fcols, dc, n=10):
+        np.random.seed(0)
+        ok=sum(predictor.predict(pd.DataFrame(
+            [{f:cf.get(f,0)+np.random.normal(0,abs(cf.get(f,0))*0.03+0.01) for f in fcols}]))[0]==dc
+               for _ in range(n))
+        return ok/n
+
+    def score_and_rank(self, instance, cfes, predictor, feature_ranges, causal_shap, dc=0):
+        if not cfes: return pd.DataFrame()
+        rows=[]
+        for cf in cfes:
+            feat=cf.get('_changed_feature','unknown')
+            a=self.actionability_scores.get(feat,0.5)
+            p=self._proximity(instance,cf,feature_ranges)
+            c=max(causal_shap.get(feat,0.0),0)
+            r=self._robustness(cf,predictor,predictor.feature_names,dc)
+            w=self.weights
+            score=w['actionability']*a+w['proximity']*p+w['causal_effect']*c+w['robustness']*r
+            rows.append({'Feature':feat,'IPE_Score':round(score,3),
+                         'Action_Score':round(a,3),'Proximity_Score':round(p,3),
+                         'Causal_Score':round(c,3),'Robust_Score':round(r,3),
+                         'Predicted_Prob':cf.get('_prob',0.5)})
+        df=pd.DataFrame(rows).sort_values('IPE_Score',ascending=False).reset_index(drop=True)
+        df.insert(0,'Rank',range(1,len(df)+1))
+        return df
