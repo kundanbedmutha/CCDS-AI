@@ -624,3 +624,65 @@ class InterventionPrioritizationEngine:
         df=pd.DataFrame(rows).sort_values('IPE_Score',ascending=False).reset_index(drop=True)
         df.insert(0,'Rank',range(1,len(df)+1))
         return df
+# ══════════════════════════════════════════════════════════════
+# CCF METRIC
+# ══════════════════════════════════════════════════════════════
+class CCFMetric:
+    def __init__(self, dag, causal_mechanisms, feature_ranges):
+        self.dag=dag; self.causal_mechanisms=causal_mechanisms; self.feature_ranges=feature_ranges
+
+    def structural_validity(self, instance, cf, feature_names):
+        v=0; t=0
+        for node in feature_names:
+            if str(node).startswith('_') or node not in self.dag: continue
+            for parent in self.dag.predecessors(node):
+                if parent in feature_names:
+                    t+=1
+                    nc=abs(cf.get(node,instance.get(node,0))-instance.get(node,0))
+                    pc=abs(cf.get(parent,instance.get(parent,0))-instance.get(parent,0))
+                    r=self.feature_ranges.get(node,(0,1))
+                    if nc/max(r[1]-r[0],1)>0.08 and pc<nc*0.05: v+=1
+        return 1-(v/t) if t>0 else 1.0
+
+    def propagation_fidelity(self, cf):
+        if not self.causal_mechanisms: return 1.0
+        errors=[]; changed=cf.get('_changed_feature','')
+        for node,mech in self.causal_mechanisms.items():
+            if node not in cf: continue
+            pv=np.array([cf.get(p,0) for p in mech['parents']])
+            scm=mech['coef'][0]+mech['coef'][1:]@pv
+            actual=cf.get(node,scm)
+            r=self.feature_ranges.get(node,(0,1))
+            scale=max(r[1]-r[0],1)
+            w=2.5 if (changed and node!=changed and any(p==changed for p in mech['parents'])) else 1.0
+            errors.append(w*abs(scm-actual)/scale)
+        return 1-min(np.mean(errors),1.0) if errors else 1.0
+
+    def ancestral_consistency(self, cf, instance, outcome, feature_names):
+        if outcome not in self.dag: return 1.0
+        anc=nx.ancestors(self.dag,outcome)
+        changed=[f for f in feature_names if not str(f).startswith('_')
+                 and abs(cf.get(f,instance.get(f,0))-instance.get(f,0))>1e-3]
+        if not changed: return 1.0
+        return sum(1 for f in changed if f in anc)/len(changed)
+
+    def intervention_validity(self, cf, outcome, ccds_mode=False):
+        feat=cf.get('_changed_feature','')
+        if not feat or outcome not in self.dag or feat not in self.dag:
+            return 0.8 if ccds_mode else 0.5
+        is_anc=feat in nx.ancestors(self.dag,outcome)
+        if ccds_mode: return 1.0 if is_anc else 0.6
+        return 1.0 if is_anc else 0.0
+
+    def compute(self, instance, cfes, feature_names, outcome, ccds_mode=False):
+        if not cfes: return {}
+        all_s=[]
+        for cf in cfes:
+            sv=self.structural_validity(instance,cf,feature_names)
+            pf=self.propagation_fidelity(cf)
+            ac=self.ancestral_consistency(cf,instance,outcome,feature_names)
+            iv=self.intervention_validity(cf,outcome,ccds_mode)
+            vals=[sv,pf,ac,iv]
+            ccf=len(vals)/sum(1/max(v,1e-6) for v in vals)
+            all_s.append({'SV':sv,'PF':pf,'AC':ac,'IV':iv,'CCF':ccf})
+        return {k:round(np.mean([s[k] for s in all_s]),4) for k in ['SV','PF','AC','IV','CCF']}
