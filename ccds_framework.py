@@ -686,3 +686,90 @@ class CCFMetric:
             ccf=len(vals)/sum(1/max(v,1e-6) for v in vals)
             all_s.append({'SV':sv,'PF':pf,'AC':ac,'IV':iv,'CCF':ccf})
         return {k:round(np.mean([s[k] for s in all_s]),4) for k in ['SV','PF','AC','IV','CCF']}
+# ══════════════════════════════════════════════════════════════
+# [U2] 100-INSTANCE EVALUATOR (UPGRADED WITH G3 ROBUSTNESS)
+# ══════════════════════════════════════════════════════════════
+def evaluate_100_instances(domain, X_test, y_test, predictor, dag,
+                            causal_mechanisms, feature_ranges,
+                            ensemble=None, n_instances=100):
+    fcols=domain.feature_cols; outcome=domain.outcome
+    ipe=InterventionPrioritizationEngine(actionability_scores=domain.actionability)
+    ccf_metric=CCFMetric(dag,causal_mechanisms,feature_ranges)
+    ccds_gen=CausalCFEGenerator(predictor,dag,X_test.head(150),feature_ranges)
+    naive_gen=NaiveCFEGenerator(predictor,feature_ranges)
+    rand_gen=RandomCFEGenerator(predictor,feature_ranges)
+    carla_gen=CARLAStyleGenerator(predictor,feature_ranges,X_test.head(150))
+    dummy_shap={f:1.0/len(fcols) for f in fcols}
+
+    probs=predictor.predict_proba(X_test)
+    selected=np.argsort(probs)[::-1][:n_instances]
+
+    all_results={m:{'ccf':[],'validity':[],'proximity':[],'sparsity':[],
+                    'actionability':[],'ipe_score':[],'robustness':[]}
+                 for m in METHODS}
+
+    print(f"    Evaluating {n_instances} instances ", end='', flush=True)
+    for count,idx in enumerate(selected):
+        if count%25==0: print(f"{count}..", end='', flush=True)
+        instance=X_test.iloc[idx].to_dict()
+
+        ccds_cfes  = ccds_gen.generate(instance, n_cfe=3, immutable=domain.immutable)
+        naive_cfes = naive_gen.generate(instance, n_cfe=3, immutable=domain.immutable)
+        rand_cfes  = rand_gen.generate(instance, n_cfe=3, immutable=domain.immutable)
+        carla_cfes = carla_gen.generate(instance, n_cfe=3, immutable=domain.immutable)
+        shap_cfes=[]
+        for feat in fcols[:3]:
+            if feat in domain.immutable: continue
+            cf=instance.copy(); r=feature_ranges.get(feat,(0,1))
+            cf[feat]=float(np.clip(instance.get(feat,0)*0.75,r[0],r[1]))
+            cf['_changed_feature']=feat
+            cf['_prob']=float(predictor.predict_proba(
+                pd.DataFrame([{f:cf.get(f,instance.get(f,0)) for f in fcols}]))[0])
+            shap_cfes.append(cf)
+
+        method_cfes={
+            'CCDS (Ours)':ccds_cfes, 'Naive DiCE':naive_cfes,
+            'Random CFE':rand_cfes,  'SHAP-Only':shap_cfes,
+            'CARLA-Style':carla_cfes
+        }
+
+        for method,cfes in method_cfes.items():
+            if not cfes:
+                for k in all_results[method]: all_results[method][k].append(0.0)
+                continue
+            ccds_mode=(method=='CCDS (Ours)')
+            ccf_res=ccf_metric.compute(instance,cfes,fcols,outcome,ccds_mode=ccds_mode)
+
+            valid=sum(1 for cf in cfes if int(cf.get('_prob',1)>=0.5)==0)/len(cfes)
+            prox_list=[]
+            for cf in cfes:
+                d=[abs(cf.get(f,instance.get(f,0))-instance.get(f,0))/
+                   max(feature_ranges.get(f,(0,1))[1]-feature_ranges.get(f,(0,1))[0],1)
+                   for f in fcols]
+                prox_list.append(1-min(np.mean(d)*3,1.0))
+            sp_list=[1-sum(1 for f in fcols if abs(cf.get(f,instance.get(f,0))-instance.get(f,0))>1e-3)/len(fcols)
+                     for cf in cfes]
+            act_list=[domain.actionability.get(cf.get('_changed_feature',''),0.5) for cf in cfes]
+            ipe_df=ipe.score_and_rank(instance,cfes,predictor,feature_ranges,dummy_shap)
+            ipe_score=float(ipe_df['IPE_Score'].iloc[0]) if not ipe_df.empty else 0.0
+
+            # [G3] Model multiplicity robustness
+            if ensemble is not None:
+                rob_list=[ensemble.recourse_robustness(cf) for cf in cfes]
+                rob=np.mean(rob_list)
+            else:
+                rob=0.5
+
+            all_results[method]['ccf'].append(ccf_res.get('CCF',0))
+            all_results[method]['validity'].append(valid)
+            all_results[method]['proximity'].append(np.mean(prox_list))
+            all_results[method]['sparsity'].append(np.mean(sp_list))
+            all_results[method]['actionability'].append(np.mean(act_list))
+            all_results[method]['ipe_score'].append(ipe_score)
+            all_results[method]['robustness'].append(rob)
+
+    print("done")
+    for m in METHODS:
+        for k in all_results[m]:
+            all_results[m][k]=np.array(all_results[m][k])
+    return all_results
