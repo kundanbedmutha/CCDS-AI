@@ -773,3 +773,44 @@ def evaluate_100_instances(domain, X_test, y_test, predictor, dag,
         for k in all_results[m]:
             all_results[m][k]=np.array(all_results[m][k])
     return all_results
+# ══════════════════════════════════════════════════════════════
+# [U3] SIGNIFICANCE TESTS (UPGRADED: multi-metric)
+# ══════════════════════════════════════════════════════════════
+def run_significance_tests(all_results, metric='ccf'):
+    our=all_results['CCDS (Ours)'][metric]
+    results={}
+    baselines=[m for m in METHODS if m != 'CCDS (Ours)']
+    print(f"\n    {'Comparison':<30} {'t-stat':>8} {'p-value':>10} {'Cohen d':>9} {'Sig':>6}")
+    print(f"    {'─'*65}")
+    for baseline in baselines:
+        base=all_results[baseline][metric]
+        n=min(len(our),len(base))
+        a,b=our[:n],base[:n]
+        t_stat,p_paired=stats.ttest_rel(a,b)
+        _,p_mw=stats.mannwhitneyu(a,b,alternative='greater')
+        pool_std=np.sqrt((a.std()**2+b.std()**2)/2)
+        cohens_d=(a.mean()-b.mean())/max(pool_std,1e-6)
+        if p_paired<0.001: sig='***'
+        elif p_paired<0.01: sig='**'
+        elif p_paired<0.05: sig='*'
+        else: sig='ns'
+        if abs(cohens_d)>=0.8: eff='large'
+        elif abs(cohens_d)>=0.5: eff='medium'
+        elif abs(cohens_d)>=0.2: eff='small'
+        else: eff='negligible'
+        print(f"    {'CCDS vs '+baseline:<30} {t_stat:>8.3f} {p_paired:>10.4f} {cohens_d:>9.3f} {sig:>4} [{eff}]")
+        results[baseline]={
+            'p_paired':p_paired,'p_mw':p_mw,
+            'cohens_d':abs(cohens_d),'effect_size':eff,
+            'significance':sig,'t_stat':t_stat
+        }
+    return results
+
+
+def summarize(all_results, metric):
+    s={}
+    for m in METHODS:
+        vals=all_results[m][metric]
+        s[m]={'mean':np.mean(vals),'std':np.std(vals),
+              'ci95':1.96*np.std(vals)/np.sqrt(len(vals))}
+    return s
