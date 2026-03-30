@@ -814,3 +814,60 @@ def summarize(all_results, metric):
         s[m]={'mean':np.mean(vals),'std':np.std(vals),
               'ci95':1.96*np.std(vals)/np.sqrt(len(vals))}
     return s
+# ══════════════════════════════════════════════════════════════
+# FIGURES
+# ══════════════════════════════════════════════════════════════
+
+def plot_cv_auc(cv_results, domain_names):
+    fig,ax=plt.subplots(figsize=(10,5))
+    fig.suptitle('[U1] 5-Fold Cross-Validated AUC — High-Fidelity Datasets\nError bars = ±1 std across folds',
+                 fontsize=13,fontweight='bold',color=COLORS['primary'])
+    x=np.arange(len(domain_names))
+    means=[cv_results[d]['mean'] for d in domain_names]
+    stds=[cv_results[d]['std'] for d in domain_names]
+    bar_colors=[COLORS['primary'], COLORS['secondary'], COLORS['causal']][:len(domain_names)]
+    bars=ax.bar(x,means,0.5,color=bar_colors,alpha=0.85,edgecolor='white')
+    ax.errorbar(x,means,yerr=stds,fmt='none',color='black',capsize=8,linewidth=2)
+    for bar,m,s in zip(bars,means,stds):
+        ax.text(bar.get_x()+bar.get_width()/2,m+s+0.02,f'{m:.4f}\n±{s:.4f}',
+                ha='center',fontsize=11,fontweight='bold')
+    ax.axhline(0.50,color='red',linestyle='--',alpha=0.5,label='Random (0.50)')
+    ax.axhline(0.75,color='green',linestyle='--',alpha=0.4,label='Publication threshold (0.75)')
+    ax.set_xticks(x); ax.set_xticklabels(domain_names,fontsize=11)
+    ax.set_ylabel('AUC-ROC',fontsize=12); ax.set_ylim(0.3,1.05)
+    ax.legend(fontsize=10); ax.set_facecolor('#F8FBFF')
+    plt.tight_layout()
+    p=f'{OUT}/fig1_cv_auc.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
+def plot_mean_std_all(all_res_list, domain_names):
+    metrics=['ccf','validity','proximity','sparsity','actionability','ipe_score','robustness']
+    labels=['CCF\n(Our Metric)','Validity','Proximity','Sparsity','Actionability','IPE Score','Robustness\n[G3]']
+    n_domains=len(domain_names)
+    fig,axes=plt.subplots(n_domains,len(metrics),figsize=(26,4*n_domains+2))
+    if n_domains==1: axes=[axes]
+    fig.suptitle('[U2] 100-Instance Evaluation: Mean ± 95% CI (5 Methods, 7 Metrics)\n'
+                 'CCDS leads on CCF, IPE Score, and Robustness — the three novel contributions',
+                 fontsize=13,fontweight='bold',color=COLORS['primary'])
+    for row,(dn,all_results) in enumerate(zip(domain_names,all_res_list)):
+        for col,(metric,label) in enumerate(zip(metrics,labels)):
+            ax=axes[row][col]
+            s=summarize(all_results,metric)
+            x=np.arange(len(METHODS))
+            means=[s[m]['mean'] for m in METHODS]
+            cis=[s[m]['ci95'] for m in METHODS]
+            bars=ax.bar(x,means,0.65,color=METHOD_COLORS,alpha=0.85,edgecolor='white')
+            ax.errorbar(x,means,yerr=cis,fmt='none',color='black',capsize=4,linewidth=1.5)
+            bars[0].set_edgecolor(COLORS['primary']); bars[0].set_linewidth(2.5)
+            ax.set_xticks(x)
+            ax.set_xticklabels(['CCDS','Naive\nDiCE','Rand','SHAP','CARLA'],fontsize=6.5)
+            ax.set_ylim(0,1.18)
+            if col==0: ax.set_ylabel(f'{dn}\nScore',fontsize=8,fontweight='bold')
+            if row==0: ax.set_title(label,fontsize=9,fontweight='bold')
+            ax.set_facecolor('#F8FBFF')
+            if means[0]==max(means):
+                ax.text(0,means[0]+cis[0]+0.04,'★',ha='center',fontsize=11,color=COLORS['success'])
+    patches=[mpatches.Patch(color=c,label=m) for c,m in zip(METHOD_COLORS,METHODS)]
+    fig.legend(handles=patches,loc='lower center',ncol=5,fontsize=9,bbox_to_anchor=(0.5,-0.02))
+    plt.tight_layout()
+    p=f'{OUT}/fig2_mean_std_100inst.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
