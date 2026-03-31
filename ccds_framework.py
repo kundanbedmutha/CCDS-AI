@@ -871,3 +871,62 @@ def plot_mean_std_all(all_res_list, domain_names):
     plt.tight_layout()
     p=f'{OUT}/fig2_mean_std_100inst.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
     print(f"  [Fig] {p}")
+def plot_significance_fig(sig_list, domain_names):
+    baselines=[m for m in METHODS if m!='CCDS (Ours)']
+    n_domains=len(domain_names)
+    fig,axes=plt.subplots(1,n_domains,figsize=(8*n_domains,7))
+    if n_domains==1: axes=[axes]
+    fig.suptitle('[U3] Statistical Significance: CCDS vs All Baselines\n'
+                 'Paired t-test | *** p<0.001  ** p<0.01  * p<0.05  ns=not significant',
+                 fontsize=13,fontweight='bold',color=COLORS['primary'])
+    for ax,(dn,sig) in zip(axes,zip(domain_names,sig_list)):
+        p_vals=[sig[b]['p_paired'] for b in baselines]
+        cds=[sig[b]['cohens_d'] for b in baselines]
+        sigs_=[sig[b]['significance'] for b in baselines]
+        effs=[sig[b]['effect_size'] for b in baselines]
+        x=np.arange(len(baselines))
+        log_p=[-np.log10(max(p,1e-10)) for p in p_vals]
+        bc=[COLORS['success'] if p<0.001 else COLORS['secondary'] if p<0.01
+            else COLORS['warning'] if p<0.05 else COLORS['non_causal'] for p in p_vals]
+        bars=ax.bar(x,log_p,0.55,color=bc,alpha=0.88,edgecolor='white',linewidth=1.5)
+        ax.axhline(-np.log10(0.05),color=COLORS['warning'],linestyle='--',lw=2,label='p=0.05')
+        ax.axhline(-np.log10(0.01),color=COLORS['secondary'],linestyle='--',lw=2,label='p=0.01')
+        ax.axhline(-np.log10(0.001),color=COLORS['success'],linestyle='--',lw=2,label='p=0.001')
+        for xi,lp,s,eff,cd in zip(x,log_p,sigs_,effs,cds):
+            ax.text(xi,lp+0.15,f'{s}\nd={cd:.2f}\n({eff})',ha='center',fontsize=8,fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels([f'CCDS vs\n{b}' for b in baselines],fontsize=9)
+        ax.set_ylabel('-log₁₀(p) — Higher = More Significant',fontsize=10)
+        ax.set_title(dn,fontsize=12,fontweight='bold')
+        ax.legend(fontsize=8,loc='upper right'); ax.set_facecolor('#F8FBFF')
+        ax.set_ylim(0,max(log_p)+3.5)
+    plt.tight_layout()
+    p=f'{OUT}/fig3_significance.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
+def plot_ccf_violin(all_res_list, domain_names):
+    n_domains=len(domain_names)
+    fig,axes=plt.subplots(1,n_domains,figsize=(8*n_domains,7))
+    if n_domains==1: axes=[axes]
+    fig.suptitle('CCF Score Distributions Across 100 Instances\n'
+                 'CCDS consistently achieves highest CCF — violin plots with 5 methods',
+                 fontsize=13,fontweight='bold',color=COLORS['primary'])
+    for ax,(dn,all_results) in zip(axes,zip(domain_names,all_res_list)):
+        data=[all_results[m]['ccf'] for m in METHODS]
+        parts=ax.violinplot(data,positions=range(len(METHODS)),showmeans=True,showmedians=True)
+        for pc,color in zip(parts['bodies'],METHOD_COLORS):
+            pc.set_facecolor(color); pc.set_alpha(0.6)
+        parts['cmeans'].set_color('black'); parts['cmedians'].set_color('white')
+        ax.boxplot(data,positions=range(len(METHODS)),widths=0.12,patch_artist=False,
+                   medianprops={'color':'white','linewidth':2},
+                   whiskerprops={'color':'grey'},capprops={'color':'grey'})
+        ax.set_xticks(range(len(METHODS)))
+        ax.set_xticklabels(METHODS,fontsize=9,rotation=15)
+        ax.set_ylabel('CCF Score',fontsize=11); ax.set_title(dn,fontsize=12,fontweight='bold')
+        ax.set_facecolor('#F8FBFF'); ax.set_ylim(0,1.1)
+        for i,m in enumerate(METHODS):
+            mv=np.mean(all_results[m]['ccf'])
+            ax.text(i,mv+0.06,f'{mv:.3f}',ha='center',fontsize=8,fontweight='bold',
+                    color=COLORS['primary'] if m=='CCDS (Ours)' else 'grey')
+    plt.tight_layout()
+    p=f'{OUT}/fig4_ccf_violin.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
