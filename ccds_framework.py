@@ -930,3 +930,40 @@ def plot_ccf_violin(all_res_list, domain_names):
     plt.tight_layout()
     p=f'{OUT}/fig4_ccf_violin.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
     print(f"  [Fig] {p}")
+def plot_ieee_table(all_res_list, sig_list, domain_names, cv_results):
+    metrics=['ccf','validity','proximity','sparsity','actionability','robustness']
+    met_labels=['CCF↑','Validity↑','Proximity↑','Sparsity↑','Actionability↑','Robustness↑']
+    n_domains=len(domain_names)
+    fig,axes=plt.subplots(n_domains,1,figsize=(20,5*n_domains+1))
+    if n_domains==1: axes=[axes]
+    fig.suptitle('IEEE Publication Results Table\nMean ± Std over 100 test instances  |  *** p<0.001  ** p<0.01  * p<0.05',
+                 fontsize=13,fontweight='bold',color=COLORS['primary'])
+    for ax,(dn,all_results,sig_res) in zip(axes,zip(domain_names,all_res_list,sig_list)):
+        ax.axis('off')
+        cv=cv_results[dn]
+        col_labels=['Method']+met_labels+['AUC 5-CV']
+        rows=[]
+        for method in METHODS:
+            row=[method]
+            for metric in metrics:
+                sm=summarize(all_results,metric)
+                mv=sm[method]['mean']; sv=sm[method]['std']
+                star=''
+                if method!='CCDS (Ours)' and metric=='ccf':
+                    star=' '+sig_res.get(method,{}).get('significance','')
+                row.append(f"{mv:.3f}±{sv:.3f}{star}")
+            row.append(f"{cv['mean']:.4f}±{cv['std']:.4f}" if method=='CCDS (Ours)' else '—')
+            rows.append(row)
+        tbl=ax.table(cellText=rows,colLabels=col_labels,loc='center',cellLoc='center')
+        tbl.auto_set_font_size(False); tbl.set_fontsize(9); tbl.scale(1,2.2)
+        for j in range(len(col_labels)):
+            tbl[(0,j)].set_facecolor(COLORS['primary'])
+            tbl[(0,j)].set_text_props(color='white',fontweight='bold')
+        for j in range(len(col_labels)):
+            tbl[(1,j)].set_facecolor('#D5F5E3')
+            tbl[(1,j)].set_text_props(fontweight='bold')
+        ax.set_title(f'{dn}  (AUC={cv["mean"]:.4f}±{cv["std"]:.4f})',
+                     fontsize=11,fontweight='bold',color=COLORS['secondary'],pad=20)
+    plt.tight_layout()
+    p=f'{OUT}/fig5_ieee_table.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
