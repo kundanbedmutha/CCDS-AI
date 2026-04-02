@@ -967,3 +967,26 @@ def plot_ieee_table(all_res_list, sig_list, domain_names, cv_results):
     plt.tight_layout()
     p=f'{OUT}/fig5_ieee_table.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
     print(f"  [Fig] {p}")
+def plot_effect_size(sig_list, domain_names):
+    baselines=[m for m in METHODS if m!='CCDS (Ours)']
+    fig,ax=plt.subplots(figsize=(14,5))
+    fig.suptitle("Cohen's d Effect Size — CCDS vs All Baselines\nd≥0.8=large  d≥0.5=medium  d≥0.2=small",
+                 fontsize=13,fontweight='bold',color=COLORS['primary'])
+    x=np.arange(len(baselines)); w=0.22
+    domain_colors=[COLORS['primary'],COLORS['secondary'],COLORS['causal']]
+    for i,(dn,sig_res) in enumerate(zip(domain_names,sig_list)):
+        ds=[sig_res[b]['cohens_d'] for b in baselines]
+        offset=(i-(len(domain_names)-1)/2)*w
+        bars=ax.bar(x+offset,ds,w,label=dn,color=domain_colors[i],alpha=0.85)
+        for bar,d in zip(bars,ds):
+            ax.text(bar.get_x()+bar.get_width()/2,bar.get_height()+0.02,
+                    f'{d:.2f}',ha='center',fontsize=9,fontweight='bold')
+    ax.axhline(0.2,color='grey',linestyle=':',lw=1.5,label='Small (d=0.2)')
+    ax.axhline(0.5,color=COLORS['warning'],linestyle='--',lw=1.5,label='Medium (d=0.5)')
+    ax.axhline(0.8,color=COLORS['success'],linestyle='--',lw=1.5,label='Large (d=0.8)')
+    ax.set_xticks(x); ax.set_xticklabels(baselines,fontsize=10)
+    ax.set_ylabel("Cohen's d",fontsize=12); ax.legend(fontsize=9,ncol=3)
+    ax.set_facecolor('#F8FBFF')
+    plt.tight_layout()
+    p=f'{OUT}/fig6_effect_size.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
