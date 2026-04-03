@@ -990,3 +990,39 @@ def plot_effect_size(sig_list, domain_names):
     plt.tight_layout()
     p=f'{OUT}/fig6_effect_size.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
     print(f"  [Fig] {p}")
+def plot_venue_guide(avg_auc, avg_ccf):
+    fig,ax=plt.subplots(figsize=(14,7)); ax.axis('off')
+    fig.suptitle('IEEE Venue Recommendation — Based on Your Actual Results',
+                 fontsize=14,fontweight='bold',color=COLORS['primary'])
+    if avg_auc>=0.80 and avg_ccf>=0.82:
+        rec='IEEE TNNLS or IEEE TKDE'; rc=COLORS['success']
+        note='Strong results — target top-tier transactions journals'
+    elif avg_auc>=0.72 or avg_ccf>=0.73:
+        rec='IEEE Access  (Primary Recommendation)'; rc=COLORS['secondary']
+        note='Peer-reviewed, Scopus & WoS indexed, ~6 week review time'
+    else:
+        rec='IEEE Access or IEEE Intelligent Systems'; rc=COLORS['warning']
+        note='Solid — consider adding real dataset for stronger AUC'
+    venues=[
+        ('IEEE TNNLS','★★★★★','AUC≥0.82, User study, Deep theory',avg_auc>=0.82),
+        ('IEEE TKDE','★★★★☆','AUC≥0.78, Large-scale expts, 5+ baselines',avg_auc>=0.78),
+        ('IEEE Intelligent Systems','★★★☆☆','AUC≥0.74, Applied XAI focus',avg_auc>=0.74),
+        ('IEEE Access','★★★☆☆','AUC≥0.70, Novel metric sufficient, Fast review',avg_auc>=0.70),
+        ('MDPI Information','★★☆☆☆','AUC≥0.60, Open access, Any contribution',True),
+    ]
+    rows=[[v,d,r,'YES ✅' if q else 'Not yet ❌'] for v,d,r,q in venues]
+    col_labels=['Venue','Difficulty','Requirements','Your Results Qualify?']
+    tbl=ax.table(cellText=rows,colLabels=col_labels,loc='center',cellLoc='left')
+    tbl.auto_set_font_size(False); tbl.set_fontsize(10); tbl.scale(1,3.0)
+    for j in range(4):
+        tbl[(0,j)].set_facecolor(COLORS['primary'])
+        tbl[(0,j)].set_text_props(color='white',fontweight='bold')
+    for i,(_,_,_,q) in enumerate(venues):
+        bg='#D5F5E3' if q else '#FADBD8'
+        for j in range(4): tbl[(i+1,j)].set_facecolor(bg)
+    ax.set_title(f'\n\nYour Metrics:  Avg AUC = {avg_auc:.4f}  |  Avg CCF = {avg_ccf:.4f}'
+                 f'\n→  RECOMMENDATION: {rec}\n{note}',
+                 fontsize=12,fontweight='bold',color=rc,pad=30)
+    plt.tight_layout()
+    p=f'{OUT}/fig7_venue.png'; plt.savefig(p,dpi=150,bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
