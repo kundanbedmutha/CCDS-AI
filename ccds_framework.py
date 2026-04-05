@@ -1081,3 +1081,41 @@ def plot_domain_variability(all_res_list, domain_names):
     p = f'{OUT}/fig8_domain_variability.png'
     plt.savefig(p, dpi=150, bbox_inches='tight'); plt.close()
     print(f"  [Fig] {p}")
+# [G6] NEW: Causal vs Correlation separation figure
+def plot_causal_vs_correlation(shap_data_list, domain_names):
+    """
+    [G6] Shows the XAI-causality gap: SHAP (correlation) vs CausalSHAP (causal).
+    This directly addresses Proposal Gap 2.3 and Carloni et al. (2025).
+    """
+    n_domains = len(domain_names)
+    fig, axes = plt.subplots(1, n_domains, figsize=(8*n_domains, 5))
+    if n_domains == 1: axes = [axes]
+    fig.suptitle('[G6] Causal vs. Correlation Feature Importance\n'
+                 'CausalSHAP re-weights features via SCM — addressing XAI-causality gap (Carloni et al. 2025)',
+                 fontsize=13, fontweight='bold', color=COLORS['primary'])
+
+    for ax, dn, shap_df in zip(axes, domain_names, shap_data_list):
+        if shap_df is None or shap_df.empty:
+            ax.text(0.5, 0.5, 'No SHAP data', ha='center', va='center')
+            continue
+        top = shap_df.head(min(8, len(shap_df))).sort_values('Causal_Importance')
+        feats = top['Feature'].tolist()
+        std_v = top['Standard_Importance'].tolist()
+        cau_v = top['Causal_Importance'].tolist()
+        y = np.arange(len(feats)); h = 0.35
+        ax.barh(y+h/2, cau_v, h, color=COLORS['causal'], alpha=0.85, label='CausalSHAP (SCM-adjusted)')
+        ax.barh(y-h/2, std_v, h, color=COLORS['b3'], alpha=0.85, label='Standard SHAP (correlation)')
+        # Arrows showing re-weighting direction
+        for yi, s, c in zip(y, std_v, cau_v):
+            if abs(c - s) > 0.005:
+                ax.annotate('', xy=(c, yi+h/2), xytext=(s, yi-h/2),
+                             arrowprops=dict(arrowstyle='->', color='black', lw=1.2))
+        ax.set_yticks(y); ax.set_yticklabels(feats, fontsize=9)
+        ax.set_xlabel('Normalized Importance', fontsize=10)
+        ax.set_title(dn, fontsize=11, fontweight='bold')
+        ax.legend(fontsize=9); ax.set_facecolor('#F8FBFF')
+
+    plt.tight_layout()
+    p = f'{OUT}/fig9_causal_vs_correlation.png'
+    plt.savefig(p, dpi=150, bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
