@@ -1119,3 +1119,44 @@ def plot_causal_vs_correlation(shap_data_list, domain_names):
     p = f'{OUT}/fig9_causal_vs_correlation.png'
     plt.savefig(p, dpi=150, bbox_inches='tight'); plt.close()
     print(f"  [Fig] {p}")
+# [G7] NEW: Cross-domain radar chart
+def plot_cross_domain_radar(all_res_list, domain_names):
+    """
+    [G7] Radar/spider chart: CCDS vs best-baseline across all metrics and domains.
+    Gives reviewers a single "at a glance" figure showing CCDS dominance profile.
+    """
+    metrics_r = ['ccf', 'validity', 'actionability', 'ipe_score', 'robustness']
+    metric_labels = ['CCF', 'Validity', 'Actionability', 'IPE Score', 'Robustness']
+    n_metrics = len(metrics_r)
+    angles = np.linspace(0, 2*np.pi, n_metrics, endpoint=False).tolist()
+    angles += angles[:1]
+
+    n_domains = len(domain_names)
+    fig, axes = plt.subplots(1, n_domains, figsize=(7*n_domains, 7),
+                              subplot_kw=dict(polar=True))
+    if n_domains == 1: axes = [axes]
+    fig.suptitle('[G7] Cross-Domain Performance Radar\nCCDS vs Best Baseline on Key Metrics',
+                 fontsize=13, fontweight='bold', color=COLORS['primary'])
+
+    for ax, dn, all_results in zip(axes, domain_names, all_res_list):
+        for m, color, lw, ls in [(
+                'CCDS (Ours)', COLORS['ours'], 2.5, '-'),
+            ('Naive DiCE', COLORS['b1'], 1.5, '--')]:
+            vals = [np.mean(all_results[m][met]) for met in metrics_r]
+            vals += vals[:1]
+            ax.plot(angles, vals, color=color, linewidth=lw, linestyle=ls, label=m)
+            ax.fill(angles, vals, color=color, alpha=0.12)
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(metric_labels, fontsize=10, fontweight='bold')
+        ax.set_ylim(0, 1)
+        ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
+        ax.set_yticklabels(['0.2','0.4','0.6','0.8','1.0'], fontsize=7)
+        ax.set_title(dn, fontsize=12, fontweight='bold', pad=15)
+        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=9)
+        ax.set_facecolor('#F8FBFF')
+        ax.grid(color='grey', alpha=0.3)
+
+    plt.tight_layout()
+    p = f'{OUT}/fig10_radar_chart.png'
+    plt.savefig(p, dpi=150, bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
