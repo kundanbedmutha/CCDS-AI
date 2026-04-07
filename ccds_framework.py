@@ -1160,3 +1160,52 @@ def plot_cross_domain_radar(all_res_list, domain_names):
     p = f'{OUT}/fig10_radar_chart.png'
     plt.savefig(p, dpi=150, bbox_inches='tight'); plt.close()
     print(f"  [Fig] {p}")
+# [G8] NEW: Multi-metric significance heatmap
+def plot_multi_metric_significance(all_res_list, domain_names):
+    """
+    [G8] Shows significance not just for CCF but across ALL metrics.
+    Strengthens the paper's claim that CCDS is broadly superior.
+    """
+    metrics_s = ['ccf', 'validity', 'actionability', 'ipe_score', 'robustness']
+    met_labels = ['CCF', 'Validity', 'Actionability', 'IPE', 'Robustness']
+    baselines_s = [m for m in METHODS if m != 'CCDS (Ours)']
+
+    n_domains = len(domain_names)
+    fig, axes = plt.subplots(1, n_domains, figsize=(7*n_domains, 5))
+    if n_domains == 1: axes = [axes]
+    fig.suptitle('[G8] Multi-Metric Significance Heatmap: CCDS vs All Baselines\n'
+                 '★★★=p<0.001  ★★=p<0.01  ★=p<0.05  ·=not significant',
+                 fontsize=13, fontweight='bold', color=COLORS['primary'])
+
+    for ax, dn, all_results in zip(axes, domain_names, all_res_list):
+        heat_data = np.zeros((len(baselines_s), len(metrics_s)))
+        annot = [[''] * len(metrics_s) for _ in range(len(baselines_s))]
+        for ri, baseline in enumerate(baselines_s):
+            for ci, metric in enumerate(metrics_s):
+                our = all_results['CCDS (Ours)'][metric]
+                base = all_results[baseline][metric]
+                n = min(len(our), len(base))
+                _, p = stats.ttest_rel(our[:n], base[:n])
+                d = (our[:n].mean() - base[:n].mean()) / max(np.sqrt((our[:n].std()**2+base[:n].std()**2)/2), 1e-6)
+                heat_data[ri, ci] = -np.log10(max(p, 1e-10)) * np.sign(d)
+                if p < 0.001: sym = '★★★'
+                elif p < 0.01: sym = '★★'
+                elif p < 0.05: sym = '★'
+                else: sym = '·'
+                annot[ri][ci] = sym
+        vmax = max(abs(heat_data).max(), 0.1)
+        im = ax.imshow(heat_data, cmap='RdYlGn', vmin=-vmax, vmax=vmax, aspect='auto')
+        ax.set_xticks(range(len(metrics_s))); ax.set_xticklabels(met_labels, fontsize=10)
+        ax.set_yticks(range(len(baselines_s))); ax.set_yticklabels(baselines_s, fontsize=9)
+        for ri in range(len(baselines_s)):
+            for ci in range(len(metrics_s)):
+                ax.text(ci, ri, annot[ri][ci], ha='center', va='center',
+                        fontsize=11, fontweight='bold',
+                        color='white' if abs(heat_data[ri,ci]) > vmax*0.5 else 'black')
+        ax.set_title(dn, fontsize=11, fontweight='bold')
+        plt.colorbar(im, ax=ax, label='-log₁₀(p) × sign(effect)', fraction=0.046, pad=0.04)
+
+    plt.tight_layout()
+    p = f'{OUT}/fig11_multi_metric_significance.png'
+    plt.savefig(p, dpi=150, bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
