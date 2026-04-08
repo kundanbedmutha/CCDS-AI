@@ -1209,3 +1209,34 @@ def plot_multi_metric_significance(all_res_list, domain_names):
     p = f'{OUT}/fig11_multi_metric_significance.png'
     plt.savefig(p, dpi=150, bbox_inches='tight'); plt.close()
     print(f"  [Fig] {p}")
+# [G3] NEW: Robustness across model variants
+def plot_robustness_comparison(all_res_list, domain_names):
+    """[G3] Model multiplicity robustness — CCDS should be most robust."""
+    n_domains = len(domain_names)
+    fig, axes = plt.subplots(1, n_domains, figsize=(8*n_domains, 5))
+    if n_domains == 1: axes = [axes]
+    fig.suptitle('[G3] Recourse Robustness: Model Multiplicity Evaluation\n'
+                 'Fraction of counterfactuals valid across 3 model variants (GBT + RF + LR)',
+                 fontsize=13, fontweight='bold', color=COLORS['primary'])
+
+    for ax, dn, all_results in zip(axes, domain_names, all_res_list):
+        means = [np.mean(all_results[m]['robustness']) for m in METHODS]
+        stds  = [np.std(all_results[m]['robustness']) for m in METHODS]
+        x = np.arange(len(METHODS))
+        bars = ax.bar(x, means, 0.6, color=METHOD_COLORS, alpha=0.85, edgecolor='white')
+        ax.errorbar(x, means, yerr=stds, fmt='none', color='black', capsize=6, linewidth=1.5)
+        bars[0].set_edgecolor(COLORS['primary']); bars[0].set_linewidth(2.5)
+        for bar, m_, s in zip(bars, means, stds):
+            ax.text(bar.get_x()+bar.get_width()/2, m_+s+0.01,
+                    f'{m_:.3f}', ha='center', fontsize=9, fontweight='bold')
+        ax.set_xticks(x); ax.set_xticklabels([m.replace(' ','\n') for m in METHODS], fontsize=9)
+        ax.set_ylabel('Robustness Score', fontsize=11)
+        ax.set_title(dn, fontsize=11, fontweight='bold')
+        ax.set_ylim(0, 1.15); ax.set_facecolor('#F8FBFF')
+
+    patches = [mpatches.Patch(color=c, label=m) for c,m in zip(METHOD_COLORS, METHODS)]
+    fig.legend(handles=patches, loc='lower center', ncol=5, fontsize=9, bbox_to_anchor=(0.5, -0.04))
+    plt.tight_layout()
+    p = f'{OUT}/fig12_robustness.png'
+    plt.savefig(p, dpi=150, bbox_inches='tight'); plt.close()
+    print(f"  [Fig] {p}")
