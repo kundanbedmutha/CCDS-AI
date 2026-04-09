@@ -1240,3 +1240,153 @@ def plot_robustness_comparison(all_res_list, domain_names):
     p = f'{OUT}/fig12_robustness.png'
     plt.savefig(p, dpi=150, bbox_inches='tight'); plt.close()
     print(f"  [Fig] {p}")
+# ══════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════
+def main():
+    t0 = time.time()
+    print("="*70)
+    print("  CCDS v4 — IEEE Publication-Ready Pipeline (UPGRADED)")
+    print("  [G1] 3 Datasets | [G2] 5 Baselines | [G3] Robustness")
+    print("  [G4] Sparsity | [G5] Domain Analysis | [G6] Causal vs Corr")
+    print("  [G7] Radar | [G8] Multi-metric Sig | [U1-U3] Retained")
+    print("="*70)
+
+    domains = [UCIGermanCreditMirror(), PimaDiabetesMirror(), AdultIncomeMirror()]
+    all_res_list = []; sig_list = []; cv_results = {}
+    domain_names = []; ccf_means = {}; auc_means = {}
+    shap_data_list = []
+
+    for domain in domains:
+        print(f"\n{'━'*70}")
+        print(f"  DOMAIN: {domain.name}")
+        print(f"{'━'*70}")
+        domain_names.append(domain.name)
+
+        df = domain.generate()
+        X = df[domain.feature_cols]; y = df[domain.outcome]
+        feature_ranges = {f:(float(X[f].min()),float(X[f].max())) for f in domain.feature_cols}
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.25, stratify=y, random_state=42)
+
+        print(f"\n▶ [U1] Risk Predictor + 5-Fold CV")
+        predictor = RiskPredictor(use_smote=True)
+        predictor.fit(X_train, y_train)
+        y_prob = predictor.predict_proba(X_test)
+        auc = roc_auc_score(y_test, y_prob)
+        ap  = average_precision_score(y_test, y_prob)
+        print(f"    Hold-out: AUC={auc:.4f} | AP={ap:.4f}")
+        cv_scores = predictor.cross_validate(X, y, cv=5)
+        print(f"    5-fold CV: AUC={cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+        cv_results[domain.name] = {'mean':cv_scores.mean(), 'std':cv_scores.std()}
+        auc_means[domain.name]  = cv_scores.mean()
+
+        print(f"\n▶ Causal Discovery")
+        disc = CausalDiscovery(alpha=0.05)
+        dag  = disc.fit(X_train, domain_edges=domain.domain_edges)
+        print(f"    DAG: {dag.number_of_edges()} edges learned")
+
+        print(f"\n▶ Causal SHAP")
+        cshap  = CausalSHAP(predictor, dag)
+        shap_df = cshap.compute(X_test, y_test, n_repeats=10)
+        shap_data_list.append(shap_df)
+
+        tmp = CausalCFEGenerator(predictor, dag, X_train, feature_ranges)
+        causal_mechanisms = tmp.causal_mechanisms
+
+        print(f"\n▶ [G3] Model Ensemble (for robustness evaluation)")
+        ensemble = ModelEnsemble()
+        ensemble.fit(X_train, y_train)
+
+        print(f"\n▶ [U2] 100-Instance Evaluation (5 methods, 7 metrics)")
+        all_results = evaluate_100_instances(
+            domain, X_test, y_test, predictor, dag, causal_mechanisms,
+            feature_ranges, ensemble=ensemble, n_instances=100)
+
+        print(f"\n    Results Table (mean ± std, N=100):")
+        print(f"    {'Method':<18} {'CCF':>11} {'Validity':>11} {'Proximity':>11} "
+              f"{'Sparsity':>11} {'Action':>9} {'IPE':>9} {'Robust':>9}")
+        print(f"    {'─'*100}")
+        for method in METHODS:
+            r = all_results[method]
+            star = ' ★' if method == 'CCDS (Ours)' else '  '
+            print(f"    {method:<18}"
+                  f" {np.mean(r['ccf']):.3f}±{np.std(r['ccf']):.3f}"
+                  f" {np.mean(r['validity']):.3f}±{np.std(r['validity']):.3f}"
+                  f" {np.mean(r['proximity']):.3f}±{np.std(r['proximity']):.3f}"
+                  f" {np.mean(r['sparsity']):.3f}±{np.std(r['sparsity']):.3f}"
+                  f" {np.mean(r['actionability']):.3f}±{np.std(r['actionability']):.3f}"
+                  f" {np.mean(r['ipe_score']):.3f}±{np.std(r['ipe_score']):.3f}"
+                  f" {np.mean(r['robustness']):.3f}±{np.std(r['robustness']):.3f}"
+                  f"{star}")
+
+        print(f"\n▶ [U3] Statistical Significance (CCF metric)")
+        sig_results = run_significance_tests(all_results, metric='ccf')
+
+        print(f"\n▶ [G8] Multi-metric Significance Check")
+        for met in ['ipe_score', 'robustness', 'actionability']:
+            print(f"    --- Metric: {met} ---")
+            run_significance_tests(all_results, metric=met)
+
+        ccf_means[domain.name]  = np.mean(all_results['CCDS (Ours)']['ccf'])
+        all_res_list.append(all_results)
+        sig_list.append(sig_results)
+
+    # ── Figures ──
+    print(f"\n{'━'*70}")
+    print(f"  Generating Publication Figures (12 total)")
+    print(f"{'━'*70}")
+    plot_cv_auc(cv_results, domain_names)
+    plot_mean_std_all(all_res_list, domain_names)
+    plot_significance_fig(sig_list, domain_names)
+    plot_ccf_violin(all_res_list, domain_names)
+    plot_ieee_table(all_res_list, sig_list, domain_names, cv_results)
+    plot_effect_size(sig_list, domain_names)
+    avg_auc = np.mean(list(auc_means.values()))
+    avg_ccf = np.mean(list(ccf_means.values()))
+    plot_venue_guide(avg_auc, avg_ccf)
+    plot_domain_variability(all_res_list, domain_names)       # [G5]
+    plot_causal_vs_correlation(shap_data_list, domain_names)  # [G6]
+    plot_cross_domain_radar(all_res_list, domain_names)       # [G7]
+    plot_multi_metric_significance(all_res_list, domain_names)# [G8]
+    plot_robustness_comparison(all_res_list, domain_names)    # [G3]
+
+    elapsed = time.time() - t0
+    print(f"\n{'═'*70}")
+    print(f"  CCDS v4 — IEEE PUBLICATION READINESS REPORT")
+    print(f"{'═'*70}")
+    for dn in domain_names:
+        cv = cv_results[dn]
+        print(f"\n  {dn}")
+        print(f"    CV AUC:   {cv['mean']:.4f} ± {cv['std']:.4f}")
+        print(f"    CCDS CCF: {ccf_means[dn]:.4f}")
+    print(f"\n  Statistical Significance (CCF):")
+    baselines_final = [m for m in METHODS if m != 'CCDS (Ours)']
+    for dn, sig_res in zip(domain_names, sig_list):
+        print(f"\n  {dn}:")
+        for b in baselines_final:
+            r = sig_res[b]
+            print(f"    vs {b:<20}: p={r['p_paired']:.4f} {r['significance']:>4}  d={r['cohens_d']:.3f} [{r['effect_size']}]")
+
+    if avg_auc >= 0.78: venue = "IEEE TNNLS or IEEE TKDE"
+    elif avg_auc >= 0.72: venue = "IEEE Access  ★ RECOMMENDED"
+    else: venue = "IEEE Access or IEEE Intelligent Systems"
+    print(f"\n  Avg AUC={avg_auc:.4f} | Avg CCF={avg_ccf:.4f}")
+    print(f"  → Recommended Venue: {venue}")
+
+    print(f"\n  Gap Coverage Summary:")
+    print(f"    ✅ [G1] 3 Datasets (German Credit, Pima Diabetes, Adult Income)")
+    print(f"    ✅ [G2] 5 Baselines (+ CARLA-Style) — matches proposal claim")
+    print(f"    ✅ [G3] Robustness metric (model multiplicity, 3 variants)")
+    print(f"    ✅ [G4] Sparsity in all tables")
+    print(f"    ✅ [G5] Domain variability analysis (Pima null results explained)")
+    print(f"    ✅ [G6] Causal vs Correlation SHAP figure")
+    print(f"    ✅ [G7] Cross-domain radar chart")
+    print(f"    ✅ [G8] Multi-metric significance (CCF + IPE + Robustness)")
+    print(f"\n  Figures (12): {OUT}/")
+    print(f"  Runtime: {elapsed:.1f}s")
+    print(f"{'═'*70}")
+
+
+if __name__ == '__main__':
+    main()
