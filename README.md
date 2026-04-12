@@ -58,3 +58,53 @@ Input Data (3 UCI Mirror Datasets)
 │                   │         + 0.30·causal_effect + 0.15·robustness
 └────────┬──────────┘
          │
+         ▼
+┌───────────────────┐
+│   CCF Metric      │  Harmonic mean of SV + PF + AC + IV
+└───────────────────┘
+```
+
+---
+
+## 📂 Repository Structure
+
+```
+Code/
+├── ccds_framework.py             # Complete CCDS v4 pipeline (1446 lines)
+├── requirements.txt              # Python dependencies
+├── ccds_mentor_presentation.html # Slide deck / walkthrough
+├── outputs_v4/                   # Generated figures (auto-created on run)
+│   ├── fig1_cv_auc.png
+│   ├── fig2_mean_std_100inst.png
+│   ├── fig3_significance.png
+│   ├── fig4_ccf_violin.png
+│   ├── fig5_ieee_table.png
+│   ├── fig6_effect_size.png
+│   ├── fig7_venue.png
+│   ├── fig8_domain_variability.png
+│   ├── fig9_causal_vs_correlation.png
+│   ├── fig10_radar_chart.png
+│   ├── fig11_multi_metric_significance.png
+│   └── fig12_robustness.png
+└── .gitignore
+```
+
+> **Note:** The `outputs_v4/` folder is auto-generated when you run the pipeline. It is excluded from version control via `.gitignore`.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/kundanbedmutha/CCDS.git
+cd CCDS
+```
+
+### 2. Create a Virtual Environment
+
+```bash
+python -m venv venv
+# Windows
+venv\Scripts\activate
