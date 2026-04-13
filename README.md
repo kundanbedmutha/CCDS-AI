@@ -108,3 +108,53 @@ cd CCDS
 python -m venv venv
 # Windows
 venv\Scripts\activate
+# macOS / Linux
+source venv/bin/activate
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Run the Full Pipeline
+
+```bash
+# Windows (required for Unicode output)
+set PYTHONIOENCODING=utf-8
+python ccds_framework.py
+
+# macOS / Linux
+python ccds_framework.py
+```
+
+The pipeline will:
+1. Generate 3 UCI-mirror synthetic datasets
+2. Train and cross-validate the risk predictor (5-fold AUC)
+3. Discover causal structure (DAG)
+4. Compute CausalSHAP importances
+5. Evaluate 100 instances across 5 CFE methods and 7 metrics
+6. Run paired t-tests + Cohen's d significance analysis
+7. Save **12 publication-ready figures** to `outputs_v4/`
+
+Expected runtime: **~21 minutes** depending on hardware (measured on Intel Core i5, 8 GB RAM).
+
+---
+
+## 📊 Datasets
+
+All datasets are synthetically generated **UCI mirror replicas** — no external download required. The statistical properties, feature distributions, and causal relationships closely mirror the original benchmark datasets:
+
+| Dataset | Original Source | N | Features | Task | AUC (typical) |
+|---|---|---|---|---|---|
+| **German Credit** (UCI Mirror) | [UCI ML Repo — Statlog German Credit](https://archive.ics.uci.edu/dataset/144/statlog+german+credit+data) | 1000 | 8 | Credit Risk | 0.76 – 0.82 |
+| **Pima Diabetes** (UCI Mirror) | [UCI ML Repo — Diabetes (Pima)](https://archive.ics.uci.edu/dataset/34/diabetes) | 768 | 8 | Diabetes Detection | 0.76 – 0.84 |
+| **Adult Income** (UCI Mirror) | [UCI ML Repo — Adult (Census Income)](https://archive.ics.uci.edu/dataset/2/adult) | 1200 | 8 | Income >50K | 0.88 – 0.92 |
+
+> **Why mirrors?** The original UCI datasets contain sensitive demographic attributes and licensing considerations. Our mirrors replicate the statistical structure (marginals, correlations, causal DAG) using controlled synthetic generation, enabling reproducible experiments without privacy or distribution concerns.
+
+### Dataset References
+
+- **German Credit** — Hofmann, H. (1994). *Statlog (German Credit Data)*. UCI Machine Learning Repository. [https://doi.org/10.24432/C5NC77](https://doi.org/10.24432/C5NC77)
+- **Pima Diabetes** — Smith, J.W., et al. (1988). *Using the ADAP Learning Algorithm to Forecast the Onset of Diabetes Mellitus*. Proceedings of the Annual Symposium on Computer Application in Medical Care.  UCI ML Repository: [https://archive.ics.uci.edu/dataset/34/diabetes](https://archive.ics.uci.edu/dataset/34/diabetes)
