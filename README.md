@@ -208,3 +208,125 @@ The causal DAG for each domain is seeded with domain-knowledge edges before stat
 |---|---|
 | `fig1_cv_auc.png` | 5-Fold Cross-Validated AUC per dataset |
 | `fig2_mean_std_100inst.png` | Mean ± 95% CI across 7 metrics for all 5 methods |
+| `fig3_significance.png` | Statistical significance: −log₁₀(p) bar charts |
+| `fig4_ccf_violin.png` | CCF score distributions (violin + box plots) |
+| `fig5_ieee_table.png` | IEEE publication-style results table |
+| `fig6_effect_size.png` | Cohen's d effect sizes across all baselines |
+| `fig7_venue.png` | Automated IEEE venue recommendation |
+| `fig8_domain_variability.png` | Domain variability analysis (why Pima shows null results) |
+| `fig9_causal_vs_correlation.png` | CausalSHAP vs Standard SHAP comparison |
+| `fig10_radar_chart.png` | Cross-domain radar/spider chart |
+| `fig11_multi_metric_significance.png` | Multi-metric significance heatmap |
+| `fig12_robustness.png` | Model multiplicity robustness evaluation |
+
+---
+
+## 🔬 Evaluation Metrics
+
+| Metric | Description |
+|---|---|
+| **CCF** | *Causal Consistency Fidelity* — our novel metric. Harmonic mean of structural validity (SV), propagation fidelity (PF), ancestral consistency (AC), and intervention validity (IV). |
+| **Validity** | Fraction of CFEs that flip the model prediction |
+| **Proximity** | Normalized distance between original and counterfactual |
+| **Sparsity** | Fraction of features left unchanged |
+| **Actionability** | Domain-weighted feasibility of suggested changes |
+| **IPE Score** | Composite Intervention Prioritization Engine score |
+| **Robustness** | Fraction of CFEs valid across 3 model variants (GBT + RF + LR) |
+
+---
+
+## ⚙️ Gap Fixes vs v3 (CCDS v4)
+
+| ID | Fix | Description |
+|---|---|---|
+| G1 | Adult Income dataset | 3rd domain — counters Pima null-result issue |
+| G2 | CARLA-Style baseline | 5th baseline — manifold-aware CFE |
+| G3 | Robustness metric | Model multiplicity across 3 variants |
+| G4 | Sparsity column | Added to all terminal result tables |
+| G5 | Domain variability | Explains Pima null results scientifically |
+| G6 | Causal vs Correlation figure | CausalSHAP vs Standard SHAP visualization |
+| G7 | Radar chart | Cross-domain at-a-glance summary |
+| G8 | Multi-metric significance | Significance across CCF + IPE + Robustness |
+
+---
+
+## 🎯 Baseline Methods
+
+| Method | Description |
+|---|---|
+| **CCDS (Ours)** | Causal CFE with SCM propagation + IPE ranking |
+| **Naive DiCE** | Greedy feature-wise search without causal constraints |
+| **Random CFE** | Random perturbation search |
+| **SHAP-Only** | Feature scaled by 0.75 factor on top-SHAP features |
+| **CARLA-Style** | Manifold-aware CFE via nearest-neighbor blending |
+
+---
+
+## 🧪 Statistical Validation
+
+- **Test**: Paired t-test (N=100 matched instances) + Mann-Whitney U (one-sided)
+- **Effect size**: Cohen's d with threshold labels (small/medium/large)
+- **Significance levels**: *** p<0.001 · ** p<0.01 · * p<0.05 · ns
+
+---
+
+## 📦 Dependencies
+
+```
+scikit-learn >= 1.3.0
+numpy        >= 1.26.0
+pandas       >= 2.1.0
+scipy        >= 1.11.0
+networkx     >= 3.2.0
+matplotlib   >= 3.8.0
+```
+
+All dependencies are **zero-cost, open-source**. No external API keys or data downloads needed.
+
+---
+
+## 📰 Publication
+
+This work has been **accepted and presented** at:
+
+> **IC3SIS 2026 — IEEE International Conference on Computing, Communication, and Cyber Security**
+
+| Field | Details |
+|---|---|
+| **Status** | ✅ Accepted & Presented |
+| **Venue** | IC3SIS 2026 (IEEE) |
+| **DOI** | Pending |
+| **Author Profile** | [Google Scholar](https://scholar.google.com/citations?user=TiKq3mUAAAAJ&hl=en) · [ResearchGate](https://www.researchgate.net/profile/Kundan-Bedmutha) |
+
+---
+
+## 📄 Citation
+
+If you use this framework in your research, please cite:
+
+```bibtex
+@inproceedings{bedmutha2026ccds,
+  title     = {CCDS: A Causal-Counterfactual Decision Support Framework for Explainable AI},
+  author    = {Bedmutha, Kundan Sagar and others},
+  booktitle = {Proceedings of the IEEE International Conference on Computing,
+               Communication, and Cyber Security (IC3SIS)},
+  year      = {2026},
+  publisher = {IEEE},
+  doi       = {pending}
+}
+```
+
+📎 Find all publications by the author on:
+[Google Scholar](https://scholar.google.com/citations?user=TiKq3mUAAAAJ&hl=en) · [ResearchGate](https://www.researchgate.net/profile/Kundan-Bedmutha)
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+  <sub>Built for IEEE publication · Python 3.10+ · CCDS v4</sub>
+</div>
